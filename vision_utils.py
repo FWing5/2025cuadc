@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import requests
 
 def find_largest_quadrilateral(frame):
     """
@@ -110,3 +111,51 @@ def detect_circles(frame):
     gray = cv2.medianBlur(gray, 5)
     return cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, 1, 100,
                             param1=100, param2=30, minRadius=10, maxRadius=100)
+
+def send_frame(frame, url="http://0.0.0.0:8000/upload_frame"):
+    """
+    frame: numpy BGR图像
+    """
+    ret, buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+    if not ret:
+        print("编码失败")
+        return False
+    files = {'file': ('frame.jpg', buf.tobytes(), 'image/jpeg')}
+    r = requests.post(url, files=files)
+    return r.status_code == 200
+
+class Camera:
+    def __init__(self, width=640, height=480):
+        self.cap = cv2.VideoCapture(0)
+
+        if not self.cap.isOpened():
+            raise RuntimeError("无法连接到摄像头。")
+
+        # 设置分辨率
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+
+        self.width = width
+        self.height = height
+
+    def read(self):
+        """读取一帧图像"""
+        ret, frame = self.cap.read()
+        if not ret:
+            raise RuntimeError("无法读取摄像头画面。")
+        return frame
+
+    def show(self, window_name="Camera"):
+        """显示实时画面（按 q 退出）"""
+        while True:
+            frame = self.read()
+            cv2.imshow(window_name, frame)
+
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+        self.release()
+
+    def release(self):
+        """释放摄像头资源"""
+        self.cap.release()
+        cv2.destroyAllWindows()

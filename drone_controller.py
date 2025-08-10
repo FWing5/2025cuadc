@@ -71,7 +71,7 @@ class DroneController:
         return self.mav.uavPosNED
 
     def fly_to(self, x, y, z, duration):
-        print(f"飞行至: ({x}, {y}, {z}) ")
+        print(f"飞行至: ({x}, {y}, {z}) ，执行 {duration} 秒")
         start_time = time.time()
         while time.time() - start_time < duration:
             self.mav.SendPosFRD(x, y, z, 0)
@@ -84,6 +84,10 @@ class DroneController:
             cur_x, cur_y, cur_z = self.mav.uavPosNED
             self.mav.SendPosFRD(cur_x, cur_y, cur_z, 0)
             time.sleep(0.05)  # 控制频率，200ms发送一次
+
+    def land(self, x = 0, y = 0, z = 0):
+        print(f"降落至: ({x}, {y}, {z}) ，降落成功后会自动disarm")
+        self.mav.sendMavLand(0, 0, 0)
 
     def adjust_position_by_pixel_offset(self, dx, dy, current_height, scale=0.004, duration=1.0):
         """
@@ -117,7 +121,7 @@ class DroneController:
         """
         x, y, z = self.get_position
         self.fly_to( x + 0.12, y, z, 2)
-        self.mav.SetServo
+        # self.mav.SetServo
         
 
     def move_back_12cm(self):

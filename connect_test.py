@@ -1,14 +1,5 @@
-import time
-import PX4MavCtrlV4 as PX4MavCtrl
+from drone_controller import *
 
-# mav = PX4MavCtrl.PX4MavCtrler(1, Com = '/dev/ttyUSB0')
-mav = PX4MavCtrl.PX4MavCtrler(1, Com = 'COM3')
+drone = DroneController()
 
-mav.InitMavLoop(2)
-print(mav.the_connection)
-print("arm")
-mav.SendMavArm(True)
-time.sleep(5)
-print("disarm")
-mav.SendMavArm(False)
-mav.stopRun()
+drone.shutdown()
