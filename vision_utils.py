@@ -112,6 +112,46 @@ def detect_circles(frame):
     return cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, 1, 100,
                             param1=100, param2=30, minRadius=10, maxRadius=100)
 
+def get_closest_center_offset(detections, img_width, img_height):
+    """
+    输入检测结果和图像尺寸，返回最靠近图像中心的目标中心与图像中心的偏移量(dx, dy)。
+
+    参数：
+        detections: list of dict，每个包含 'bbox' = [x1,y1,x2,y2]
+        img_width: int，图像宽度
+        img_height: int，图像高度
+
+    返回：
+        (dx, dy): float，目标中心与图像中心的像素偏移
+        如果没有检测目标，返回 None
+    """
+
+    if not detections:
+        return None
+
+    cx_img = img_width / 2
+    cy_img = img_height / 2
+
+    min_dist = None
+    closest_dx = None
+    closest_dy = None
+
+    for det in detections:
+        x1, y1, x2, y2 = det['bbox']
+        cx = (x1 + x2) / 2
+        cy = (y1 + y2) / 2
+
+        dx = cx - cx_img
+        dy = cy - cy_img
+
+        dist = math.hypot(dx, dy)
+        if (min_dist is None) or (dist < min_dist):
+            min_dist = dist
+            closest_dx = dx
+            closest_dy = dy
+
+    return closest_dx, closest_dy
+
 def send_frame(frame, url="http://0.0.0.0:8000/upload_frame"):
     """
     frame: numpy BGR图像
