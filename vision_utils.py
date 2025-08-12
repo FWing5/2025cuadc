@@ -2,6 +2,7 @@ import cv2
 import math
 import numpy as np
 import requests
+import socket
 
 def find_largest_quadrilateral(frame):
     """
@@ -219,16 +220,40 @@ def get_circle_offset_in_closest_bbox(detections, circles, img_width, img_height
     dy = closest_circle[1] - cy_img
     return dx, dy
 
-def send_frame(frame, url="http://0.0.0.0:8000/upload_frame"):
+def send_frame(frame):
     """
     frame: numpy BGR图像
     """
+    IP_BASE = "192.168.4."
+    PORT = 8000
+    TIMEOUT = 1  # 秒
+    def check_port(ip, port=PORT, timeout=TIMEOUT):
+        """检测ip:port是否开放"""
+        try:
+            with socket.create_connection((ip, port), timeout=timeout):
+                return True
+        except Exception:
+            return False
+
+    def find_working_ip():
+        """扫描192.168.4.2~4，返回第一个能连上的IP"""
+        for i in range(2, 5):
+            ip = IP_BASE + str(i)
+            print(f"检测 {ip}:{PORT} ...")
+            if check_port(ip, PORT):
+                print(f"找到可用IP: {ip}")
+                return ip
+        print("未找到可用IP")
+        return None
+    
+    ip = find_working_ip
+    
     ret, buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
     if not ret:
         print("编码失败")
         return False
     files = {'file': ('frame.jpg', buf.tobytes(), 'image/jpeg')}
-    r = requests.post(url, files=files)
+    r = requests.post(ip, files=files)
     return r.status_code == 200
 
 def yolo_detection_on_quad(frame, quad, detector):
