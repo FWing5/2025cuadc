@@ -118,7 +118,6 @@ print("[INFO] 检测器预热完成")
 main_loop()
 
 print("[INFO] 返回起始点并降落")
-drone.fly_to(0, 0, -4, 10)
 drone.land()
 
 time.sleep(10)

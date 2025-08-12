@@ -92,7 +92,6 @@ while True:
             drone.adjust_position_by_pixel_offset(dx, dy)
 
 print("[INFO] 返回起始点并降落")
-drone.fly_to(0, 0, -4, 10)
 drone.land()
 
 time.sleep(10)

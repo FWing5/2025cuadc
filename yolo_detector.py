@@ -15,14 +15,14 @@ sys.path.insert(0, './myyolov5')
 from models.common import DetectMultiBackend
 from utils.general import non_max_suppression, scale_boxes
 from utils.torch_utils import select_device
-from utils.datasets import letterbox
+from utils.augmentations import letterbox
 from utils.plots import Annotator, colors  # 新版绘图工具
 
 
 class YOLOv5Detector:
     def __init__(self,
                  weights='myyolov5/weights/best.pt',
-                 img_size=640,
+                 img_size=480,
                  conf_thres=0.25,
                  iou_thres=0.45,
                  device='',
