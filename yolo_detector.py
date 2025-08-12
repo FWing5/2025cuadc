@@ -15,8 +15,8 @@ sys.path.insert(0, './myyolov5')
 from models.common import DetectMultiBackend
 from utils.general import non_max_suppression, scale_boxes
 from utils.torch_utils import select_device
-from utils.plots import plot_one_box
 from utils.datasets import letterbox
+from utils.plots import Annotator, colors  # 新版绘图工具
 
 
 class YOLOv5Detector:
@@ -66,20 +66,22 @@ class YOLOv5Detector:
 
         detections = []
         im0 = img0.copy()
+        annotator = Annotator(im0, line_width=2, example=str(self.names))
 
         if pred and len(pred[0]):
             det = pred[0]
             det[:, :4] = scale_boxes(img_tensor.shape[2:], det[:, :4], im0.shape).round()
             for *xyxy, conf, cls in det:
-                bbox = [int(x.item()) for x in xyxy]
-                label = f'{self.names[int(cls)]} {conf:.2f}'
-                plot_one_box(bbox, im0, label=label, color=(0, 255, 0), line_thickness=2)
+                label_text = f'{self.names[int(cls)]} {conf:.2f}'
+                annotator.box_label(xyxy, label_text, color=colors(int(cls), True))
                 detections.append({
-                    'bbox': bbox,  # [x1, y1, x2, y2]
+                    'bbox': [int(x.item()) for x in xyxy],
                     'conf': conf.item(),
                     'class_id': int(cls),
                     'label': self.names[int(cls)]
                 })
+
+        im0 = annotator.result()
 
         if self.view_img:
             cv2.imshow('YOLOv5 Detection', im0)
@@ -89,9 +91,7 @@ class YOLOv5Detector:
 
 
 if __name__ == '__main__':
-    # 示例：实时摄像头推理
     cap = cv2.VideoCapture(0)
-    # 切换 use_letterbox=True/False 对比速度
     detector = YOLOv5Detector(view_img=True, use_letterbox=True)
 
     import time
