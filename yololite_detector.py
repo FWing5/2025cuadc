@@ -2,6 +2,7 @@ import cv2
 import torch
 import sys
 from pathlib import Path
+from torch.serialization import safe_globals
 
 sys.path.insert(0, './YOLOv5-Lite')
 
@@ -12,12 +13,14 @@ from utils.torch_utils import select_device
 
 class YOLOv5LiteDetector:
     def __init__(self, 
-                 weights='weights/best.pt', 
+                 weights='YOLOv5-Lite/weights/best.pt', 
                  img_size=640, 
                  conf_thres=0.45, 
                  iou_thres=0.5,
                  device='',
                  view_img=False):
+        
+        safe_globals.add('numpy.core.multiarray._reconstruct')
         
         self.device = select_device(device)
         self.model = attempt_load(weights, map_location=self.device)

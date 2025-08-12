@@ -18,7 +18,11 @@ try:
     while True:
         time.sleep(1)
         frame = camera.read()
-        send_frame(frame)
+        f = send_frame(frame)
+        if not f:
+            print("连接异常")
+            camera.release()
+            sys.exit(0)
 except Exception as e:
     print(f"异常退出: {e}")
     camera.release()

@@ -246,14 +246,19 @@ def send_frame(frame):
         print("未找到可用IP")
         return None
     
-    ip = find_working_ip
+    ip = find_working_ip()
+    if ip is None:
+        print("未找到有效服务器。")
+        return
+
+    url = f"http://{ip}:{PORT}/upload_frame"
     
     ret, buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
     if not ret:
         print("编码失败")
         return False
     files = {'file': ('frame.jpg', buf.tobytes(), 'image/jpeg')}
-    r = requests.post(ip, files=files)
+    r = requests.post(url, files=files)
     return r.status_code == 200
 
 def yolo_detection_on_quad(frame, quad, detector):
