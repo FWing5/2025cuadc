@@ -3,7 +3,7 @@ import select
 import sys
 from drone_controller import DroneController
 from vision_utils import *
-from yololite_detector import YOLOv5LiteDetector
+from yolo_detector import YOLOv5Detector
 
 CAM_WIDTH = 640
 CAM_HEIGHT = 480
@@ -15,7 +15,7 @@ def key_pressed():
     return dr
 
 drone = DroneController()
-detector = YOLOv5LiteDetector(view_img=False)
+detector = YOLOv5Detector(view_img=False)
 cam = Camera(CAM_WIDTH, CAM_HEIGHT)
 
 # 启动前拍一帧

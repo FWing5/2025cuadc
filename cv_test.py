@@ -3,7 +3,7 @@ import select
 import sys
 import cv2
 from vision_utils import *
-from yololite_detector import YOLOv5LiteDetector
+from yolo_detector import YOLOv5Detector
 from drone_controller import DroneController
 
 CAM_WIDTH = 640
@@ -21,7 +21,7 @@ def main_loop():
     last_time = time.time()
 
     cam = Camera()
-    detector = YOLOv5LiteDetector(view_img=False)
+    detector = YOLOv5Detector(view_img=False)
 
     quad = None
     perspective_matrix = None
@@ -97,7 +97,7 @@ def main_loop():
 
 
 drone = DroneController()
-detector = YOLOv5LiteDetector(view_img=False)
+detector = YOLOv5Detector(view_img=False)
 cam = Camera(CAM_WIDTH, CAM_HEIGHT)
 
 # 启动前拍一帧

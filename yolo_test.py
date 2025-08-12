@@ -1,10 +1,10 @@
 import time
 import argparse
-from yololite_detector import YOLOv5LiteDetector
+from yolo_detector import YOLOv5Detector
 from vision_utils import Camera, send_frame
 
 def main(if_send: bool, send_freq: float):
-    detector = YOLOv5LiteDetector(view_img=False)
+    detector = YOLOv5Detector(view_img=False)
     cam = Camera()
 
     print("按 Ctrl+C 退出。")

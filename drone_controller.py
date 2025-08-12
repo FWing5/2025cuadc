@@ -12,6 +12,7 @@ class DroneController:
                 - "raspi-usb": 树莓派USB连接
                 - "raspi-com": 树莓派串口连接
                 - "windows": Windows设备连接
+                - "simu": 使用仿真环境
         """
         platform = platform.lower()
 
@@ -28,6 +29,10 @@ class DroneController:
             elif platform == "windows":
                 print("[INFO] 使用 Windows 串口连接")
                 self.mav = PX4MavCtrl.PX4MavCtrler(1, Com='COM3')
+            
+            elif platform == "simu":
+                print("[INFO] 使用 仿真")
+                self.mav = PX4MavCtrl.PX4MavCtrler(1)
 
             else:
                 raise ValueError(f"[ERROR] 不支持的平台类型: '{platform}'，请使用 'raspi-usb'、'raspi-com' 或 'windows'。")
