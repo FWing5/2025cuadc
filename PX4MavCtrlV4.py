@@ -901,9 +901,6 @@ class PX4MavCtrler:
         if UDPMode>1.5: # UDPMode should lisen to PX4
             if self.isCom:
                 self.the_connection = mavutil.mavlink_connection(self.ComName,self.baud)
-                print("1heartbeat has been sent")
-                self.the_connection.wait_heartbeat()
-                print("1init success")
             else:
                 if self.isRealFly:
                     self.the_connection = mavutil.mavlink_connection('udpout:' + self.ip + ':'+str(self.port))
@@ -3148,6 +3145,5 @@ class PX4MavCtrler:
             0,
             aux1_value,
             aux2_value,
-            0, 0, 0, 0, 0
         )
 
