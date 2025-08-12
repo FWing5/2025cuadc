@@ -3,13 +3,15 @@ from drone_controller import *
 
 drone = DroneController()
 
-drone.fly_to(0, 0, -4, 10)
+drone.fly_to(0, 0, -4, 2)
 
-drone.fly_to(2, 0, -4, 10)
+drone.fly_to(3, 0, -4, 3)
 
-drone.fly_to(2, 2, -4, 10)
+drone.hover(5)
 
-drone.fly_to(0, 0, -4, 10)
+drone.fly_to(3, 3, -4, 3)
+
+drone.fly_to(0, 0, -4, 2)
 
 drone.land()
 

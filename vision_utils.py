@@ -1,4 +1,5 @@
 import cv2
+import math
 import numpy as np
 import requests
 
@@ -152,6 +153,72 @@ def get_closest_center_offset(detections, img_width, img_height):
 
     return closest_dx, closest_dy
 
+
+def get_circle_offset_in_closest_bbox(detections, circles, img_width, img_height):
+    """
+    在最近的检测框中找到最近的圆心，返回画面中心与该圆心的 dx、dy
+
+    参数：
+        detections: list of dict，每个包含 'bbox' = [x1,y1,x2,y2]
+        circles: ndarray 或 None，来自 detect_circles 的结果 (N, 1, 3) 或 (N, 3)
+        img_width: int，图像宽度
+        img_height: int，图像高度
+
+    返回：
+        (dx, dy): float，画面中心与圆心的像素偏移
+        如果没有检测框或没有圆，则返回 None
+    """
+    if not detections or circles is None:
+        return None
+
+    # 找出离画面中心最近的检测框
+    cx_img = img_width / 2
+    cy_img = img_height / 2
+    min_dist_box = None
+    closest_box = None
+
+    for det in detections:
+        x1, y1, x2, y2 = det['bbox']
+        cx_box = (x1 + x2) / 2
+        cy_box = (y1 + y2) / 2
+        dist_box = math.hypot(cx_box - cx_img, cy_box - cy_img)
+        if (min_dist_box is None) or (dist_box < min_dist_box):
+            min_dist_box = dist_box
+            closest_box = (x1, y1, x2, y2)
+
+    if closest_box is None:
+        return None
+
+    # 过滤在该检测框内的圆
+    x1, y1, x2, y2 = closest_box
+    circles = np.squeeze(circles)  # 可能是 (N,1,3) 或 (N,3)
+    if circles.ndim == 1:
+        circles = np.expand_dims(circles, axis=0)
+
+    circles_in_box = []
+    for (cx, cy, r) in circles:
+        if x1 <= cx <= x2 and y1 <= cy <= y2:
+            circles_in_box.append((cx, cy, r))
+
+    if not circles_in_box:
+        return None
+
+    # 找出该框内离画面中心最近的圆
+    min_dist_circle = None
+    closest_circle = None
+    for (cx, cy, r) in circles_in_box:
+        dist_circle = math.hypot(cx - cx_img, cy - cy_img)
+        if (min_dist_circle is None) or (dist_circle < min_dist_circle):
+            min_dist_circle = dist_circle
+            closest_circle = (cx, cy)
+
+    if closest_circle is None:
+        return None
+
+    dx = closest_circle[0] - cx_img
+    dy = closest_circle[1] - cy_img
+    return dx, dy
+
 def send_frame(frame, url="http://0.0.0.0:8000/upload_frame"):
     """
     frame: numpy BGR图像
@@ -163,6 +230,32 @@ def send_frame(frame, url="http://0.0.0.0:8000/upload_frame"):
     files = {'file': ('frame.jpg', buf.tobytes(), 'image/jpeg')}
     r = requests.post(url, files=files)
     return r.status_code == 200
+
+def yolo_detection_on_quad(frame, quad, detector):
+    """
+    在给定四边形内，使用YOLO检测目标并筛选在四边形内部的目标。
+
+    返回：
+        targets_inside: list of ((cx, cy), class_id)
+        img_with_markers: 带检测框和圆点的调试图像
+    """
+    img = cv2.resize(frame, (640, 640))
+
+    # 这里调用你的检测模块接口
+    detections, result_img = detector.detect(frame)  
+
+    targets_inside = []
+
+    for det in detections:
+        x1, y1, x2, y2 = det['bbox']
+        cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+        if point_in_quad((cx, cy), quad):
+            targets_inside.append(((cx, cy), det['class_id']))
+            cv2.circle(result_img, (cx, cy), 5, (0, 255, 0), -1)
+        else:
+            cv2.circle(result_img, (cx, cy), 5, (0, 0, 255), -1)
+
+    return targets_inside, result_img
 
 class Camera:
     def __init__(self, width=640, height=480):

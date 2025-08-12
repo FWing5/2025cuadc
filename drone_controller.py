@@ -1,4 +1,5 @@
 import time
+import math
 import PX4MavCtrlV4 as PX4MavCtrl
 
 class DroneController:
@@ -46,6 +47,11 @@ class DroneController:
             self.mav.SendMavArm(True)
             time.sleep(1)
 
+            # Step 5: 获取初始 yaw
+            self.initial_yaw = self.mav.uavAngEular[2]
+            print(f"[INFO] 初始 yaw: {math.degrees(self.initial_yaw):.2f}°")
+
+
             print("[SUCCESS] 无人机已连接并准备就绪！")
 
         except Exception as e:
@@ -69,34 +75,56 @@ class DroneController:
 
     def get_position(self):
         return self.mav.uavPosNED
+    
+    def get_yaw(self):
+        return self.mav.uavAngEular[2]
 
-    def fly_to(self, x, y, z, duration):
-        print(f"飞行至: ({x}, {y}, {z}) ，执行 {duration} 秒")
+    def fly_to(self, x_body, y_body, z_body, duration):
+        """
+        机体系（前、右、下）坐标飞行 duration 秒
+        """
+        current_yaw = self.get_yaw()
+        yaw_relative = current_yaw - self.initial_yaw  # 相对起飞方向
+
+        # 旋转矩阵：机体 → 全局 NED
+        x_north = x_body * math.cos(yaw_relative) - y_body * math.sin(yaw_relative)
+        y_east  = x_body * math.sin(yaw_relative) + y_body * math.cos(yaw_relative)
+        z_down  = z_body  # 下方向在 NED 中不变
+
+        # print(f"[DEBUG] fly_to 转换: Body({x_body:.2f}, {y_body:.2f}, {z_body:.2f}) → NED({x_north:.2f}, {y_east:.2f}, {z_down:.2f}), Yaw相对 {math.degrees(yaw_relative):.2f}°")
+
         start_time = time.time()
         while time.time() - start_time < duration:
-            self.mav.SendPosFRD(x, y, z, 0)
-            time.sleep(0.05)  # 控制频率，200ms发送一次
+            self.mav.SendPosNED(x_north, y_east, z_down, 0)
+            time.sleep(0.05)  # 控制频率 20Hz
 
     def hover(self, duration):
         print(f"悬停 {duration} 秒")
         start_time = time.time()
         while time.time() - start_time < duration:
-            cur_x, cur_y, cur_z = self.mav.uavPosNED
-            self.mav.SendPosFRD(cur_x, cur_y, cur_z, 0)
+            cur_x, cur_y, cur_z = self.get_position()
+            self.mav.SendPosNED(cur_x, cur_y, cur_z, 0)
+            time.sleep(0.05)  # 控制频率，200ms发送一次
+
+    def down(self,d, duration):
+        print(f"原地下降 {d} 米，执行 {duration} 秒")
+        start_time = time.time()
+        while time.time() - start_time < duration:
+            cur_x, cur_y, cur_z = self.get_position()
+            self.mav.SendPosNED(cur_x, cur_y, cur_z + d, 0)
             time.sleep(0.05)  # 控制频率，200ms发送一次
 
     def land(self, x = 0, y = 0, z = 0):
         print(f"降落至: ({x}, {y}, {z}) ，降落成功后会自动disarm")
         self.mav.sendMavLand(0, 0, 0)
 
-    def adjust_position_by_pixel_offset(self, dx, dy, current_height, scale=0.004, duration=1.0):
+    def adjust_position_by_pixel_offset(self, dx, dy, scale=0.004, duration=1.0):
         """
         根据图像中心偏移量进行微调飞行。
 
         参数：
             dx (int/float): 图像横向偏移（+右，-左）
             dy (int/float): 图像纵向偏移（+下，-上）
-            current_height (float): 当前飞行高度（负数）
             scale (float): 像素到米的缩放因子（默认 0.004）
             duration (float): 飞行持续时间（秒）
         """
@@ -108,25 +136,25 @@ class DroneController:
         adjust_north = -dy * scale  # 图像向下是正，NED的north向前
         adjust_east  = dx * scale   # 图像向右是正，NED的east向右
 
-        cur_x, cur_y, _ = self.mav.uavPosNED
+        cur_x, cur_y, cur_z = self.get_position()
         new_x = cur_x + adjust_north
         new_y = cur_y + adjust_east
 
-        print(f"[INFO] 微调坐标：dx={dx}, dy={dy}, 调整后位置=({new_x:.2f}, {new_y:.2f}, {current_height})")
-        self.fly_to(new_x, new_y, current_height, duration)
+        print(f"[INFO] 微调坐标：dx={dx}, dy={dy}, 调整后位置=({new_x:.2f}, {new_y:.2f}, {cur_z:.2f})")
+        self.fly_to(new_x, new_y, cur_z, duration)
 
-    def move_front_12cm(self):
+    def drop_bottle(self, bottle="front"):
         """
-        投掷前方水瓶。
+        投掷前/后方水瓶。
+        bottle = "front"/"back"
         """
-        x, y, z = self.get_position
-        self.fly_to( x + 0.12, y, z, 2)
-        # self.mav.SetServo
+        x, y, z = self.get_position()
+        if bottle == 'front':
+            self.fly_to(x + 0.12, y, z, 2)
+            self.mav.SetServo(1, -1)
+        elif bottle == 'back':
+            self.fly_to(x - 0.12, y, z, 2)
+            self.mav.SetServo(-1, 1)
+        time.sleep(1)
         
-
-    def move_back_12cm(self):
-        """
-        投掷后方水瓶。
-        """
-        x, y, z = self.get_position
-        self.fly_to( x - 0.12, y, z, 2)
+        

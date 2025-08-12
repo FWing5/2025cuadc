@@ -9,7 +9,7 @@ import sys
 import copy
 import os
 import numpy as np
-from DllSimCtrlAPI import Data3D
+# from DllSimCtrlAPI import Data3D
 isEnableRdis=False
 
 
@@ -361,7 +361,7 @@ class PX4MavCtrler:
         self.uavVibr = [0, 0, 0] # Estimated vibration xyz from PX4
 
         # 三维仿真数据真值，对应true**系列数据
-        self.out3Ddata=Data3D()
+        # self.out3Ddata=Data3D()
 
         self.truePosGPS = [0, 0, 0] # True simulated PosGPS from CopterSim's DLL model
         self.trueSimulinkData=[0]*32 #create 32D data，来自DLL模型的OutCopterData接口
@@ -3134,20 +3134,20 @@ class PX4MavCtrler:
     #  @param servo_number 伺服通道号 (1~8)
     #  @param pwm_value PWM 值 (典型 1000~2000 μs)
     #  @return 无
-    def SetServo(self, servo_number, pwm_value):
+    def SetServo(self, aux1_value, aux2_value):
         """ 
         Control a servo channel directly via MAVLink.
         servo_number: int (1-8)
         pwm_value: int (1000-2000 μs typical)
         """
-        # MAV_CMD_DO_SET_SERVO = 183
-        MAV_CMD_DO_SET_SERVO = 183
+        MAV_CMD_DO_SET_ACTUATOR = 187
         
         # 复用 SendMavCmdLong
         self.SendMavCmdLong(
-            MAV_CMD_DO_SET_SERVO,
-            servo_number,    # param1: servo number
-            pwm_value,       # param2: PWM value
-            0, 0, 0, 0, 0    # 其他参数不用
+            MAV_CMD_DO_SET_ACTUATOR,
+            0,
+            aux1_value,
+            aux2_value,
+            0, 0, 0, 0, 0
         )
 
