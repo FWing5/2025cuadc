@@ -64,7 +64,7 @@ class DroneController:
         time.sleep(1)
 
         print("[INFO] 停止 Offboard 模式...")
-        self.mav.stopOffboard()
+        self.mav.endOffboard()
         time.sleep(1)
 
         print("[INFO] 停止 MAVLink 通信循环...")
