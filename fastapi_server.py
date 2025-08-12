@@ -1,6 +1,6 @@
 import io
 import time
-from fastapi import FastAPI, UploadFile, File, HTTPException, Request
+from fastapi import FastAPI, UploadFile, File, HTTPException, Response
 from fastapi.responses import StreamingResponse, HTMLResponse, JSONResponse
 import cv2
 import numpy as np
