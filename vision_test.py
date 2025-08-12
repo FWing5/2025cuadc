@@ -18,7 +18,7 @@ try:
     while True:
         time.sleep(1)
         frame = camera.read()
-        send_frame(frame)
+        send_frame(frame, camera.url)
 except Exception as e:
     print(f"异常退出: {e}")
     camera.release()

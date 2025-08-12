@@ -29,7 +29,7 @@ def main(if_send: bool, send_freq: float):
                 now = time.time()
                 # send_freq == 0 表示每帧都发送
                 if send_freq == 0 or (now - last_send_time) >= send_freq:
-                    send_frame(frame)
+                    send_frame(frame, cam.url)
                     last_send_time = now
     except KeyboardInterrupt:
         print("退出检测。")

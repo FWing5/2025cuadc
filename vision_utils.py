@@ -2,6 +2,7 @@ import cv2
 import math
 import numpy as np
 import requests
+import socket
 
 def find_largest_quadrilateral(frame):
     """
@@ -219,11 +220,12 @@ def get_circle_offset_in_closest_bbox(detections, circles, img_width, img_height
     dy = closest_circle[1] - cy_img
     return dx, dy
 
-def send_frame(frame, url="http://0.0.0.0:8000/upload_frame"):
+def send_frame(frame, url):
     """
     frame: numpy BGR图像
     """
-    ret, buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+
+    ret, buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 60])
     if not ret:
         print("编码失败")
         return False
@@ -258,8 +260,8 @@ def yolo_detection_on_quad(frame, quad, detector):
     return targets_inside, result_img
 
 class Camera:
-    def __init__(self, width=640, height=480):
-        self.cap = cv2.VideoCapture(0)
+    def __init__(self, index=0, width=640, height=480):
+        self.cap = cv2.VideoCapture(index)
 
         if not self.cap.isOpened():
             raise RuntimeError("无法连接到摄像头。")
@@ -270,6 +272,39 @@ class Camera:
 
         self.width = width
         self.height = height
+        self.url = self.api_connect_init()
+
+    def api_connect_init(self):
+            IP_BASE = "192.168.4."
+            PORT = 8000
+            TIMEOUT = 1  # 秒
+            def check_port(ip, port=PORT, timeout=TIMEOUT):
+                """检测ip:port是否开放"""
+                try:
+                    with socket.create_connection((ip, port), timeout=timeout):
+                        return True
+                except Exception:
+                    return False
+
+            def find_working_ip():
+                """扫描192.168.4.2~4，返回第一个能连上的IP"""
+                for i in range(2, 5):
+                    ip = IP_BASE + str(i)
+                    print(f"检测 {ip}:{PORT} ...")
+                    if check_port(ip, PORT):
+                        print(f"找到可用IP: {ip}")
+                        return ip
+                print("未找到可用IP")
+                return None
+            
+            ip = find_working_ip()
+            if ip is None:
+                print("未找到有效服务器。")
+                return None
+
+            url = f"http://{ip}:{PORT}/upload_frame"
+            return url
+            
 
     def read(self):
         """读取一帧图像"""
