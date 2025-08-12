@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>实时图片</title>
+</head>
+<body>
+    <!-- 图片容器 -->
+    <img id="liveImage" src="/latest_frame">
+    
+    <script>
+        // 设置刷新频率（毫秒）
+        const interval = 100;  // 100ms = 10帧/秒
+        
+        setInterval(() => {
+            const img = document.getElementById('liveImage');
+            // 添加时间戳防止浏览器缓存
+            img.src = "/latest_frame?t=" + new Date().getTime();
+        }, interval);
+    </script>
+</body>
+</html>

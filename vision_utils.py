@@ -258,8 +258,8 @@ def yolo_detection_on_quad(frame, quad, detector):
     return targets_inside, result_img
 
 class Camera:
-    def __init__(self, width=640, height=480):
-        self.cap = cv2.VideoCapture(0)
+    def __init__(self, index=0, width=640, height=480):
+        self.cap = cv2.VideoCapture(index)
 
         if not self.cap.isOpened():
             raise RuntimeError("无法连接到摄像头。")

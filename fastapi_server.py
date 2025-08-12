@@ -1,6 +1,6 @@
 import io
 from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, HTMLResponse
 import cv2
 import numpy as np
 import threading
@@ -47,6 +47,10 @@ def latest_frame():
         raise HTTPException(status_code=500, detail="编码图片失败")
 
     return StreamingResponse(io.BytesIO(buffer.tobytes()), media_type="image/jpeg")
+
+@app.get("/", response_class=HTMLResponse)
+def video_page():
+    return open("index.html").read()
 
 if __name__ == "__main__":
     import uvicorn
