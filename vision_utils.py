@@ -294,7 +294,6 @@ class Camera:
                     if check_port(ip, PORT):
                         print(f"找到可用IP: {ip}")
                         return ip
-                print("未找到可用IP")
                 return None
             
             ip = find_working_ip()

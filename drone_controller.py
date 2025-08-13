@@ -12,6 +12,7 @@ class DroneController:
                 - "raspi-usb": 树莓派USB连接
                 - "raspi-com": 树莓派串口连接
                 - "windows": Windows设备连接
+                - "simu": 使用仿真环境
         """
         platform = platform.lower()
 
@@ -28,6 +29,10 @@ class DroneController:
             elif platform == "windows":
                 print("[INFO] 使用 Windows 串口连接")
                 self.mav = PX4MavCtrl.PX4MavCtrler(1, Com='COM3')
+            
+            elif platform == "simu":
+                print("[INFO] 使用 仿真")
+                self.mav = PX4MavCtrl.PX4MavCtrler(1)
 
             else:
                 raise ValueError(f"[ERROR] 不支持的平台类型: '{platform}'，请使用 'raspi-usb'、'raspi-com' 或 'windows'。")
@@ -79,10 +84,12 @@ class DroneController:
     def get_yaw(self):
         return self.mav.uavAngEular[2]
 
-    def fly_to(self, x_body, y_body, z_body, duration):
+    def fly_to(self, x_body, y_body, z_body, duration=2):
         """
-        机体系（前、右、下）坐标飞行 duration 秒
+        机体系（前、右、下）坐标飞行
+        duration 秒
         """
+        print(f"前 {x_body} 米，右 {y_body} 米，高度{-z_body}米，执行 {duration} 秒")
         current_yaw = self.get_yaw()
         yaw_relative = current_yaw - self.initial_yaw  # 相对起飞方向
 
@@ -91,14 +98,37 @@ class DroneController:
         y_east  = x_body * math.sin(yaw_relative) + y_body * math.cos(yaw_relative)
         z_down  = z_body  # 下方向在 NED 中不变
 
-        # print(f"[DEBUG] fly_to 转换: Body({x_body:.2f}, {y_body:.2f}, {z_body:.2f}) → NED({x_north:.2f}, {y_east:.2f}, {z_down:.2f}), Yaw相对 {math.degrees(yaw_relative):.2f}°")
-
         start_time = time.time()
         while time.time() - start_time < duration:
             self.mav.SendPosNED(x_north, y_east, z_down, 0)
             time.sleep(0.05)  # 控制频率 20Hz
+    
+    def fly_toward(self, x_body_offset, y_body_offset, z_body_offset, duration=2):
+        """
+        相对当前位置的机体偏移飞行，传入相对偏移，内部计算目标全局坐标并发送
+        """
+        print(f"相对当前位置偏移飞行：前 {x_body_offset} 米，右 {y_body_offset} 米，执行 {duration} 秒")
+        current_yaw = self.get_yaw()
+        yaw_relative = current_yaw - self.initial_yaw
 
-    def hover(self, duration):
+        cur_x, cur_y, cur_z = self.get_position()
+
+        # 机体坐标系偏移转换到全局NED偏移
+        offset_x = x_body_offset * math.cos(yaw_relative) - y_body_offset * math.sin(yaw_relative)
+        offset_y = x_body_offset * math.sin(yaw_relative) + y_body_offset * math.cos(yaw_relative)
+        offset_z = z_body_offset
+
+        # 新目标全局坐标 = 当前全局坐标 + 偏移
+        target_x = cur_x + offset_x
+        target_y = cur_y + offset_y
+        target_z = cur_z + offset_z
+
+        start_time = time.time()
+        while time.time() - start_time < duration:
+            self.mav.SendPosNED(target_x, target_y, target_z, 0)
+            time.sleep(0.05)
+
+    def hover(self, duration=2):
         print(f"悬停 {duration} 秒")
         start_time = time.time()
         while time.time() - start_time < duration:
@@ -106,7 +136,7 @@ class DroneController:
             self.mav.SendPosNED(cur_x, cur_y, cur_z, 0)
             time.sleep(0.05)  # 控制频率，200ms发送一次
 
-    def down(self,d, duration):
+    def down(self,d, duration=2):
         print(f"原地下降 {d} 米，执行 {duration} 秒")
         start_time = time.time()
         while time.time() - start_time < duration:
@@ -118,43 +148,35 @@ class DroneController:
         print(f"降落至: ({x}, {y}, {z}) ，降落成功后会自动disarm")
         self.mav.sendMavLand(0, 0, 0)
 
-    def adjust_position_by_pixel_offset(self, dx, dy, scale=0.004, duration=1.0):
+    def adjust_position_by_pixel_offset(self, dx, dy, duration=2.0, scale=0.004):
         """
-        根据图像中心偏移量进行微调飞行。
+        根据图像偏移调整机体相对偏移飞行
 
         参数：
-            dx (int/float): 图像横向偏移（+右，-左）
-            dy (int/float): 图像纵向偏移（+下，-上）
-            scale (float): 像素到米的缩放因子（默认 0.004）
-            duration (float): 飞行持续时间（秒）
+            dx: 图像右方向偏移（像素）
+            dy: 图像下方向偏移（像素）
+            scale: 像素转米的比例
+            duration: 持续时间（秒）
         """
-        if self.mav is None:
-            print("[ERROR] 无人机未连接，无法微调")
-            return
 
-        # 将图像坐标偏移转换为 NED 坐标调整值
-        adjust_north = -dy * scale  # 图像向下是正，NED的north向前
-        adjust_east  = dx * scale   # 图像向右是正，NED的east向右
+        # 计算机体坐标系偏移量
+        x_body = -dy * scale  # 图像下为正，机体前为正，符号可能要根据实际调整
+        y_body = dx * scale   # 图像右为正，机体右为正
 
-        cur_x, cur_y, cur_z = self.get_position()
-        new_x = cur_x + adjust_north
-        new_y = cur_y + adjust_east
-
-        print(f"[INFO] 微调坐标：dx={dx}, dy={dy}, 调整后位置=({new_x:.2f}, {new_y:.2f}, {cur_z:.2f})")
-        self.fly_to(new_x, new_y, cur_z, duration)
+        print(f"[INFO] 机体坐标系偏移: x_body={x_body:.3f}m, y_body={y_body:.3f}m")
+        self.fly_toward(x_body, y_body, 0, duration)  # z轴不变，传0表示维持当前高度
 
     def drop_bottle(self, bottle="front"):
         """
         投掷前/后方水瓶。
         bottle = "front"/"back"
         """
-        x, y, z = self.get_position()
         if bottle == 'front':
-            self.fly_to(x + 0.12, y, z, 2)
+            self.fly_toward(0.12, 0, 0, 3)  # 机体坐标系，前进12cm
             self.mav.SetServo(1, -1)
         elif bottle == 'back':
-            self.fly_to(x - 0.12, y, z, 2)
+            self.fly_toward(-0.12, 0, 0, 3) # 机体坐标系，后退12cm
             self.mav.SetServo(-1, 1)
         time.sleep(1)
-        
+
         

@@ -3,17 +3,26 @@ from drone_controller import *
 
 drone = DroneController()
 
-drone.fly_to(0, 0, -4, 2)
-
-drone.fly_to(3, 0, -4, 3)
-
-drone.hover(5)
-
-drone.fly_to(3, 3, -4, 3)
-
-drone.fly_to(0, 0, -4, 2)
-
-drone.land()
-
-time.sleep(10)
-drone.shutdown()
+try:
+    drone.fly_to(0, 0, -4, 5)
+    drone.fly_to(3, 0, -4, 5)
+    drone.hover(5)
+    drone.down(1,3)
+    drone.adjust_position_by_pixel_offset(100, 100, 3)
+    drone.fly_to(3, 3, -4, 5)
+    drone.fly_to(0, 0, -4, 5)
+    drone.land()
+except Exception as e:
+    print(f"出现异常: {e}，执行紧急降落！")
+    try:
+        drone.land()
+    except Exception as land_e:
+        print(f"降落过程中也发生异常: {land_e}")
+    # 可以选择是否继续抛出异常，或直接退出
+    # raise
+finally:
+    time.sleep(10)
+    try:
+        drone.shutdown()
+    except Exception as shutdown_e:
+        print(f"关闭飞控时异常: {shutdown_e}")
