@@ -90,12 +90,9 @@ class DroneController:
         duration 秒
         """
         print(f"前 {x_body} 米，右 {y_body} 米，高度{-z_body}米，执行 {duration} 秒")
-        current_yaw = self.get_yaw()
-        yaw_relative = current_yaw - self.initial_yaw  # 相对起飞方向
-
         # 旋转矩阵：机体 → 全局 NED
-        x_north = x_body * math.cos(yaw_relative) - y_body * math.sin(yaw_relative)
-        y_east  = x_body * math.sin(yaw_relative) + y_body * math.cos(yaw_relative)
+        x_north = x_body * math.cos(self.initial_yaw) - y_body * math.sin(self.initial_yaw)
+        y_east  = x_body * math.sin(self.initial_yaw) + y_body * math.cos(self.initial_yaw)
         z_down  = z_body  # 下方向在 NED 中不变
 
         start_time = time.time()
@@ -108,8 +105,6 @@ class DroneController:
         相对当前位置的机体偏移飞行，传入相对偏移，内部计算目标全局坐标并发送
         """
         print(f"相对当前位置偏移飞行：前 {x_body_offset} 米，右 {y_body_offset} 米，执行 {duration} 秒")
-        current_yaw = self.get_yaw()
-        yaw_relative = current_yaw - self.initial_yaw
 
         cur_x, cur_y, cur_z = self.get_position()
 

@@ -106,52 +106,59 @@ def video_page():
     </head>
     <body>
         <img id="liveImage" src="/latest_frame">
-
+        
         <script>
-        let currentVersion = -1;
+            let currentVersion = -1;
+            let retryCount = 0;
+            const MAX_RETRIES = 5;
 
-        function buildUrl() {
-        const ts = Date.now();
-        const v = currentVersion >= 0 ? `&version=${currentVersion}` : '';
-        return `/latest_frame?t=${ts}${v}`;
-        }
-
-        function updateImage() {
-        const img = document.getElementById('liveImage');
-        const url = buildUrl();
-        img.src = url;
-
-        // 同步获取头部的版本信息（GET，但不使用响应体）
-        fetch(url, { method: 'GET', cache: 'no-store' })
-            .then(async (response) => {
-            const versionHeader = response.headers.get('X-Frame-Version');
-            if (versionHeader) {
-                currentVersion = parseInt(versionHeader);
+            async function updateImage() {
+                try {
+                    const url = `/latest_frame` + (currentVersion >= 0 ? `?version=${currentVersion}` : '') + `&t=${Date.now()}`;
+                    const response = await fetch(url);
+                    
+                    if (response.status === 200) {
+                        const versionHeader = response.headers.get('X-Frame-Version');
+                        if (versionHeader) {
+                            currentVersion = parseInt(versionHeader);
+                            retryCount = 0;
+                        }
+                        const blob = await response.blob();
+                        document.getElementById('liveImage').src = URL.createObjectURL(blob);
+                    } 
+                } catch (error) {
+                    console.error('图片更新失败:', error);
+                    if (++retryCount > MAX_RETRIES) {
+                        console.error('达到最大重试次数，重新加载页面');
+                        setTimeout(() => location.reload(), 2000);
+                    }
+                }
             }
-            // 如果是 204 或 304，都不报错，等待下一次更新
-            })
-            .catch((e) => console.error('获取版本失败:', e));
-        }
 
-        async function checkForUpdates() {
-        try {
-            const response = await fetch(`/check_update?version=${currentVersion}&timeout=300`);
-            const data = await response.json();
-            if (data.update) {
-            currentVersion = data.new_version;
+            async function checkForUpdates() {
+                try {
+                    const response = await fetch(`/check_update?version=${currentVersion}&timeout=300`);
+                    const data = await response.json();
+                    
+                    if (data.update) {
+                        currentVersion = data.new_version;
+                        updateImage();
+                    }
+                    checkForUpdates();
+                } catch (error) {
+                    console.error('更新检查失败:', error);
+                    setTimeout(checkForUpdates, 2000);
+                }
+            }
+
+            // 定时刷新，每秒一次
+            setInterval(updateImage, 1000);
+
+            // 初始加载
             updateImage();
-            }
-            // 继续长轮询
             checkForUpdates();
-        } catch (error) {
-            console.error('更新检查失败:', error);
-            setTimeout(checkForUpdates, 2000);
-        }
-        }
-
-        updateImage();
-        checkForUpdates();
         </script>
+
     </body>
     </html>
     """
