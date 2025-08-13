@@ -131,16 +131,16 @@ class DroneController:
     def hover(self, duration=2):
         print(f"悬停 {duration} 秒")
         start_time = time.time()
+        cur_x, cur_y, cur_z = self.get_position()
         while time.time() - start_time < duration:
-            cur_x, cur_y, cur_z = self.get_position()
             self.mav.SendPosNED(cur_x, cur_y, cur_z, 0)
             time.sleep(0.05)  # 控制频率，200ms发送一次
 
-    def down(self,d, duration=2):
+    def down(self, d, duration=2):
         print(f"原地下降 {d} 米，执行 {duration} 秒")
         start_time = time.time()
+        cur_x, cur_y, cur_z = self.get_position()
         while time.time() - start_time < duration:
-            cur_x, cur_y, cur_z = self.get_position()
             self.mav.SendPosNED(cur_x, cur_y, cur_z + d, 0)
             time.sleep(0.05)  # 控制频率，200ms发送一次
 
