@@ -12,41 +12,34 @@ app = FastAPI()
 class FrameCache:
     def __init__(self):
         self.lock = threading.Lock()
-        self.frame = None  # 存储最新的BGR numpy数组
-        self.version = 0    # 帧版本号
-        self.last_updated = 0  # 最后更新时间戳
-        self.event = asyncio.Event()  # 新帧到达事件
+        self.frame = None
+        self.version = 0
+        self.last_updated = 0.0
 
     def update(self, frame: np.ndarray):
         with self.lock:
             self.frame = frame.copy()
             self.version += 1
             self.last_updated = time.time()
-            self.event.set()  # 触发新帧事件
-            self.event.clear()  # 重置事件
 
-    def get_frame(self):
+    def get_frame_and_version(self):
         with self.lock:
-            if self.frame is None:
-                return None
-            return self.frame.copy()
-    
+            return (None if self.frame is None else self.frame.copy(), self.version)
+
     def get_version(self):
         with self.lock:
             return self.version
             
-    async def wait_for_update(self, client_version: int, timeout: float = 30.0):
-        """等待新帧到达或超时"""
-        # 如果客户端版本已是最新，立即返回
-        if client_version < self.version:
-            return True
-            
-        try:
-            # 等待新帧事件触发或超时
-            await asyncio.wait_for(self.event.wait(), timeout=timeout)
-            return True
-        except asyncio.TimeoutError:
-            return False
+async def wait_for_update_poll(cache: FrameCache, client_version: int, timeout: float = 30.0, interval: float = 0.2):
+    # 轮询版本变化，避免跨事件循环对象
+    start = time.time()
+    while True:
+        current_version = cache.get_version()
+        if client_version < current_version:
+            return True, current_version
+        if time.time() - start >= timeout:
+            return False, current_version
+        await asyncio.sleep(interval)
 
 frame_cache = FrameCache()
 
@@ -69,39 +62,35 @@ async def upload_frame(file: UploadFile = File(...)):
 
 @app.get("/latest_frame")
 def latest_frame(version: int = -1):
-    """获取最新帧图像，可选版本号参数"""
-    # 如果请求指定版本且是最新版本，返回304减少传输
     current_version = frame_cache.get_version()
-    if version == current_version:
-        return Response(status_code=304)
-    
-    frame = frame_cache.get_frame()
-    if frame is None:
-        raise HTTPException(status_code=404, detail="暂无图片数据")
+    # 如果客户端的版本等于当前版本，则返回 304，减少流量
+    if version == current_version and current_version > 0:
+        return Response(status_code=304, headers={
+            "X-Frame-Version": str(current_version),
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+        })
 
-    # 使用较低质量压缩
+    frame, current_version = frame_cache.get_frame_and_version()
+    headers = {
+        "X-Frame-Version": str(current_version),
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+    }
+
+    if frame is None:
+        # 没有帧，返回 204，避免报错
+        return Response(status_code=204, headers=headers)
+
     ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 50])
     if not ret:
         raise HTTPException(status_code=500, detail="编码图片失败")
 
-    # 添加缓存控制头
-    headers = {
-        "X-Frame-Version": str(current_version),
-        "Cache-Control": "no-cache, no-store, must-revalidate"
-    }
-    
-    return StreamingResponse(
-        io.BytesIO(buffer.tobytes()), 
-        media_type="image/jpeg",
-        headers=headers
-    )
+    return StreamingResponse(io.BytesIO(buffer.tobytes()), media_type="image/jpeg", headers=headers)
 
 @app.get("/check_update")
-async def check_update(version: int, timeout: int = 30):
-    """长轮询接口检查是否有新帧"""
-    if await frame_cache.wait_for_update(version, timeout):
-        return JSONResponse({"update": True, "new_version": frame_cache.get_version()})
-    return JSONResponse({"update": False, "current_version": frame_cache.get_version()})
+async def check_update(version: int = -1, timeout: int = 30):
+    # 如果客户端从未拿过版本(-1)，不强制立即 update。使用轮询等待，保证没有输入时不报错
+    updated, new_version = await wait_for_update_poll(frame_cache, version, float(timeout))
+    return JSONResponse({"update": updated, "new_version": new_version})
 
 @app.get("/", response_class=HTMLResponse)
 def video_page():
@@ -117,59 +106,51 @@ def video_page():
     </head>
     <body>
         <img id="liveImage" src="/latest_frame">
-        
+
         <script>
-            let currentVersion = -1;
-            let retryCount = 0;
-            const MAX_RETRIES = 5;
-            
-            function updateImage() {
-                const img = document.getElementById('liveImage');
-                // 添加时间戳防止缓存
-                const url = `/latest_frame?t=${Date.now()}` + 
-                            (currentVersion >= 0 ? `&version=${currentVersion}` : '');
-                img.src = url;
-                
-                // 从响应头获取版本号
-                fetch(url, { method: 'HEAD' })
-                    .then(response => {
-                        const versionHeader = response.headers.get('X-Frame-Version');
-                        if (versionHeader) {
-                            currentVersion = parseInt(versionHeader);
-                            retryCount = 0; // 重置重试计数器
-                        }
-                    })
-                    .catch(error => {
-                        console.error('获取版本号失败:', error);
-                        if (++retryCount > MAX_RETRIES) {
-                            console.error('达到最大重试次数，重新加载页面');
-                            setTimeout(() => location.reload(), 2000);
-                        }
-                    });
+        let currentVersion = -1;
+
+        function buildUrl() {
+        const ts = Date.now();
+        const v = currentVersion >= 0 ? `&version=${currentVersion}` : '';
+        return `/latest_frame?t=${ts}${v}`;
+        }
+
+        function updateImage() {
+        const img = document.getElementById('liveImage');
+        const url = buildUrl();
+        img.src = url;
+
+        // 同步获取头部的版本信息（GET，但不使用响应体）
+        fetch(url, { method: 'GET', cache: 'no-store' })
+            .then(async (response) => {
+            const versionHeader = response.headers.get('X-Frame-Version');
+            if (versionHeader) {
+                currentVersion = parseInt(versionHeader);
             }
-            
-            async function checkForUpdates() {
-                try {
-                    const response = await fetch(`/check_update?version=${currentVersion}&timeout=300`);
-                    const data = await response.json();
-                    
-                    if (data.update) {
-                        currentVersion = data.new_version;
-                        updateImage();
-                    }
-                    // 无论是否有更新，都继续检查
-                    checkForUpdates();
-                } catch (error) {
-                    console.error('更新检查失败:', error);
-                    // 失败后重试
-                    setTimeout(checkForUpdates, 2000);
-                }
-            }
-            
-            // 初始加载
+            // 如果是 204 或 304，都不报错，等待下一次更新
+            })
+            .catch((e) => console.error('获取版本失败:', e));
+        }
+
+        async function checkForUpdates() {
+        try {
+            const response = await fetch(`/check_update?version=${currentVersion}&timeout=300`);
+            const data = await response.json();
+            if (data.update) {
+            currentVersion = data.new_version;
             updateImage();
-            // 开始长轮询更新检查
+            }
+            // 继续长轮询
             checkForUpdates();
+        } catch (error) {
+            console.error('更新检查失败:', error);
+            setTimeout(checkForUpdates, 2000);
+        }
+        }
+
+        updateImage();
+        checkForUpdates();
         </script>
     </body>
     </html>
@@ -177,4 +158,4 @@ def video_page():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="192.168.4.4", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
