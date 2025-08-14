@@ -4,13 +4,9 @@ from drone_controller import *
 drone = DroneController()
 
 try:
-    drone.fly_to(0, 0, -4, 5)
-    drone.fly_to(3, 0, -4, 5)
-    drone.hover(5)
-    drone.down(1,3)
-    drone.adjust_position_by_pixel_offset(100, 100, 3)
-    drone.fly_to(3, 3, -4, 5)
-    drone.fly_to(0, 0, -4, 5)
+    drone.fly_to(0, 0, -2, 5)
+    drone.fly_to(3, 0, 4, 5)
+
     drone.land()
 except Exception as e:
     print(f"出现异常: {e}，执行紧急降落！")

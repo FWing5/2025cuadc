@@ -1,6 +1,8 @@
 import time
 import math
 import PX4MavCtrlV4 as PX4MavCtrl
+from pymavlink import mavutil
+
 
 class DroneController:
     def __init__(self, platform="raspi-usb"):
@@ -50,7 +52,7 @@ class DroneController:
             # Step 4: 解锁无人机（Arm）
             print("[INFO] 解锁无人机 (Arm)...")
             self.mav.SendMavArm(True)
-            time.sleep(1)
+            # time.sleep(1)
 
             # Step 5: 获取初始 yaw
             self.initial_yaw = self.mav.uavAngEular[2]
@@ -62,6 +64,7 @@ class DroneController:
         except Exception as e:
             print(f"[ERROR] 初始化无人机通信失败: {e}")
             self.mav = None  # 防止self.mav未定义引发后续错误
+            raise
 
     def shutdown(self):
         print("[INFO] 上锁无人机（Disarm）...")
@@ -97,7 +100,7 @@ class DroneController:
 
         start_time = time.time()
         while time.time() - start_time < duration:
-            self.mav.SendPosNED(x_north, y_east, z_down, 0)
+            self.mav.SendPosNED(x_north, y_east, z_down)
             time.sleep(0.05)  # 控制频率 20Hz
     
     def fly_toward(self, x_body_offset, y_body_offset, z_body_offset, duration=2):
@@ -109,8 +112,8 @@ class DroneController:
         cur_x, cur_y, cur_z = self.get_position()
 
         # 机体坐标系偏移转换到全局NED偏移
-        offset_x = x_body_offset * math.cos(yaw_relative) - y_body_offset * math.sin(yaw_relative)
-        offset_y = x_body_offset * math.sin(yaw_relative) + y_body_offset * math.cos(yaw_relative)
+        offset_x = x_body_offset * math.cos(self.initial_yaw) - y_body_offset * math.sin(self.initial_yaw)
+        offset_y = x_body_offset * math.sin(self.initial_yaw) + y_body_offset * math.cos(self.initial_yaw)
         offset_z = z_body_offset
 
         # 新目标全局坐标 = 当前全局坐标 + 偏移
@@ -120,7 +123,7 @@ class DroneController:
 
         start_time = time.time()
         while time.time() - start_time < duration:
-            self.mav.SendPosNED(target_x, target_y, target_z, 0)
+            self.mav.SendPosNED(target_x, target_y, target_z)
             time.sleep(0.05)
 
     def hover(self, duration=2):
@@ -128,7 +131,7 @@ class DroneController:
         start_time = time.time()
         cur_x, cur_y, cur_z = self.get_position()
         while time.time() - start_time < duration:
-            self.mav.SendPosNED(cur_x, cur_y, cur_z, 0)
+            self.mav.SendPosNED(cur_x, cur_y, cur_z)
             time.sleep(0.05)  # 控制频率，200ms发送一次
 
     def down(self, d, duration=2):
@@ -136,7 +139,7 @@ class DroneController:
         start_time = time.time()
         cur_x, cur_y, cur_z = self.get_position()
         while time.time() - start_time < duration:
-            self.mav.SendPosNED(cur_x, cur_y, cur_z + d, 0)
+            self.mav.SendPosNED(cur_x, cur_y, cur_z + d)
             time.sleep(0.05)  # 控制频率，200ms发送一次
 
     def land(self, x = 0, y = 0, z = 0):
@@ -174,4 +177,5 @@ class DroneController:
             self.mav.SetServo(-1, 1)
         time.sleep(1)
 
-        
+    def send_heartbeat(self):
+        self.mav.the_connection.mav.heartbeat_send(mavutil.mavlink.MAV_TYPE_GCS, mavutil.mavlink.MAV_AUTOPILOT_INVALID, 0, 0, 0)

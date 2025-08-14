@@ -3,6 +3,8 @@ import math
 import numpy as np
 import requests
 import socket
+import sys
+import time
 
 def find_largest_quadrilateral(frame):
     """
@@ -49,9 +51,9 @@ def sort_quad_points(quad):
     """
     # pts: 4x2 array
     # 返回顺时针排序：TL, TR, BR, BL
-    pts = np.array(pts)
+    pts = np.array(quad, dtype=np.float32)
     center = np.mean(pts, axis=0)
-    angles = np.arctan2(pts[:,1] - center[1], pts[:,0] - center[0])
+    angles = np.arctan2(pts[:, 1] - center[1], pts[:, 0] - center[0])
     sorted_idx = np.argsort(angles)
     return pts[sorted_idx]
 
@@ -220,18 +222,27 @@ def get_circle_offset_in_closest_bbox(detections, circles, img_width, img_height
     dy = closest_circle[1] - cy_img
     return dx, dy
 
-def send_frame(frame, url):
+def send_frame(frame, timeout_sec=2.0):
     """
     frame: numpy BGR图像
+    timeout_sec: 网络超时时间（秒）
     """
-
-    ret, buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 60])
-    if not ret:
-        print("编码失败")
+    url = "http://192.168.4.6:8000/upload_frame"
+    try:
+        ret, buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 60])
+        if not ret:
+            print("编码失败")
+            return False
+        files = {'file': ('frame.jpg', buf.tobytes(), 'image/jpeg')}
+        r = requests.post(url, files=files, timeout=timeout_sec)
+        return r.status_code == 200
+    except requests.exceptions.Timeout:
+        print(f"[WARN] 发送超时({timeout_sec}s)，已跳过")
         return False
-    files = {'file': ('frame.jpg', buf.tobytes(), 'image/jpeg')}
-    r = requests.post(url, files=files)
-    return r.status_code == 200
+    except Exception as e:
+        print(f"[ERROR] 发送失败: {e}")
+        return False
+
 
 def yolo_detection_on_quad(frame, quad, detector):
     """
@@ -260,57 +271,53 @@ def yolo_detection_on_quad(frame, quad, detector):
     return targets_inside, result_img
 
 class Camera:
-    def __init__(self, index=0, width=640, height=480):
-        self.cap = cv2.VideoCapture(index)
+    def __init__(self, width=640, height=480, mode = "real", index=0):
+        if mode == "real":
+            self.mode = "real"
+            self.cap = cv2.VideoCapture(index)
 
-        if not self.cap.isOpened():
-            raise RuntimeError("无法连接到摄像头。")
+            if not self.cap.isOpened():
+                raise RuntimeError("无法连接到摄像头。")
 
-        # 设置分辨率
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+            # 设置分辨率
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
 
-        self.width = width
-        self.height = height
-        self.url = self.api_connect_init()
+            self.width = width
+            self.height = height
+        else:
+            self.mode = "simu"
+            # 控制接口与图像采集接口
+            import VisionCaptureApi
+            import UE4CtrlAPI
 
-    def api_connect_init(self):
-            IP_BASE = "192.168.4."
-            PORT = 8000
-            TIMEOUT = 1  # 秒
-            def check_port(ip, port=PORT, timeout=TIMEOUT):
-                """检测ip:port是否开放"""
-                try:
-                    with socket.create_connection((ip, port), timeout=timeout):
-                        return True
-                except Exception:
-                    return False
+            # 初始化UE4与视觉模块
+            ue = UE4CtrlAPI.UE4CtrlAPI()
+            vis = VisionCaptureApi.VisionCaptureApi()
+            vis.jsonLoad()
+            if not vis.sendReqToUE4():
+                sys.exit(0)
+            vis.startImgCap(True)
 
-            def find_working_ip():
-                """扫描192.168.4.2~4，返回第一个能连上的IP"""
-                for i in range(2, 5):
-                    ip = IP_BASE + str(i)
-                    print(f"检测 {ip}:{PORT} ...")
-                    if check_port(ip, PORT):
-                        print(f"找到可用IP: {ip}")
-                        return ip
-                return None
-            
-            ip = find_working_ip()
-            if ip is None:
-                print("未找到有效服务器。")
-                return None
-
-            url = f"http://{ip}:{PORT}/upload_frame"
-            return url
-            
+            # 设置分辨率与帧率
+            ue.sendUE4Cmd('r.setres 1080x720w', 0)
+            ue.sendUE4Cmd('t.MaxFPS 30', 0)
+            time.sleep(2)
+            self.vis = vis
 
     def read(self):
         """读取一帧图像"""
-        ret, frame = self.cap.read()
-        if not ret:
-            raise RuntimeError("无法读取摄像头画面。")
-        return frame
+        if self.mode == "real":
+            ret, frame = self.cap.read()
+            if not ret:
+                raise RuntimeError("无法读取摄像头画面。")
+            return frame
+        elif self.mode == "simu":
+            if self.vis.hasData[0]:
+                frame = self.vis.Img[0]
+                if frame is not None and frame.size > 0:
+                    return frame
+            return None
 
     def show(self, window_name="Camera"):
         """显示实时画面（按 q 退出）"""
