@@ -408,7 +408,15 @@ def main():
         # 基础初始化
         logging.info("[INIT] 初始化检测器/相机")
         detector = YOLOv5Detector(view_img=False)
-        cam = Camera(CAM_WIDTH, CAM_HEIGHT)
+        try:
+            cam = Camera(CAM_WIDTH, CAM_HEIGHT, index=0)
+        except Exception as e0:
+            print(f"Camera index 0 failed: {e0}")
+            try:
+                cam = Camera(CAM_WIDTH, CAM_HEIGHT, index=1)
+                print("Fallback to camera index 1.")
+            except Exception as e1:
+                raise RuntimeError(f"Both camera 0 and 1 failed. err0={e0}, err1={e1}")
 
         # 启动前拍一帧
         try_send_frame_from_cam(cam)
